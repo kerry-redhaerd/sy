@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>角色记录系统</title>
+  <style>
+    /* 保持样式不变 */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    body {
+      max-width: 1000px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    h1 {
+      text-align: center;
+      margin: 20px 0;
+      color: #333;
+    }
+   .nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+   .nav button {
+      padding: 8px 16px;
+      border: none;
+      background: #4285f4;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+   .nav button:hover {
+      background: #3367d6;
+    }
+   .page {
+      display: none;
+    }
+   .active {
+      display: block;
+    }
+   .form-group {
+      display: flex;
+      gap: 10px;
+      margin: 15px 0;
+      align-items: flex-end;
+    }
+    input, select, button {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+   .btn {
+      padding: 5px 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 3px;
+      font-size: 14px;
+      margin-right: 5px;
+    }
+   .del {
+      background: #ea4335;
+      color: white;
+    }
+   .add {
+      background: #34a853;
+      color: white;
+    }
+   .view {
+      background: #fbbc05;
+      color: white;
+    }
+   .edit {
+      background: #4285f4;
+      color: white;
+    }
+   .role-form, .role-list {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+   .role-list {
+      align-items: center;
+    }
+   .autocomplete {
+      position: relative;
+      flex: 1;
+    }
+   .autocomplete-items {
+      position: absolute;
+      border: 1px solid #ddd;
+      background: white;
+      max-height: 150px;
+      overflow-y: auto;
+      width: 100%;
+      z-index: 100;
+    }
+   .autocomplete-items div {
+      padding: 8px;
+      cursor: pointer;
+    }
+   .autocomplete-items div:hover {
+      background: #f1f1f1;
+    }
+   .hidden {
+      display: none;
+    }
+   .error {
+      color: #ea4335;
+      margin: 10px 0;
+      text-align: center;
+      padding: 10px;
+      border: 1px solid #f8d7da;
+      background-color: #f8d7da;
+      border-radius: 4px;
+    }
+   .debug {
+      color: #1976d2;
+      margin: 5px 0;
+      font-size: 14px;
+      padding: 5px;
+      background: #e3f2fd;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h1>角色记录系统</h1>
+  
+  <!-- 错误提示区域 -->
+  <div class="error hidden" id="errorMessage"></div>
+  <!-- 调试信息区域 -->
+  <div id="debugInfo"></div>
+  
+  <div class="nav">
+    <button id="recordBtn">记录角色</button>
+    <button id="searchBtn">搜索角色</button>
+  </div>
+
+  <!-- 记录页面 -->
+  <div id="record" class="page active">
+    <div class="form-group">
+      <input type="text" id="qqName" placeholder="QQ名" style="flex:1">
+      <input type="text" id="friendCode" placeholder="好友码" style="flex:1">
+      <button id="addUserBtn" class="btn add">添加用户</button>
+    </div>
+
+    <table>
+      <tr>
+        <th>序号</th>
+        <th>QQ名</th>
+        <th>好友码</th>
+        <th>操作</th>
+      </tr>
+      <tbody id="userList"></tbody>
+    </table>
+  </div>
+
+  <!-- 搜索页面 -->
+  <div id="search" class="page">
+    <div class="form-group">
+      <input type="text" id="searchName" placeholder="角色名" style="flex:1">
+      <select id="searchFavor" style="flex:1">
+        <option value="">好感度</option>
+        <option value="五十">好感50</option>
+        <option value="非五十">好感非50</option>
+      </select>
+      <select id="searchWeapon" style="flex:1">
+        <option value="">专武等级</option>
+        <option value="三星">三星</option>
+        <option value="专一">专一</option>
+        <option value="专二">专二</option>
+        <option value="专三">专三</option>
+        <option value="专四">专四</option>
+      </select>
+      <button id="searchBtnAction" class="btn add">搜索</button>
+    </div>
+
+    <table>
+      <tr>
+        <th>QQ名</th>
+        <th>好友码</th>
+        <th>匹配角色</th>
+      </tr>
+      <tbody id="searchResult"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // 服务器API地址（请确认端口正确）
+    const API_URL = 'http://152.136.23.157:3000';
+    let users = [];
+    let allRoles = [];
+    
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      // 绑定所有按钮事件（避免全局函数问题）
+      document.getElementById('recordBtn').addEventListener('click', () => showPage('record'));
+      document.getElementById('searchBtn').addEventListener('click', () => showPage('search'));
+      document.getElementById('addUserBtn').addEventListener('click', addUser);
+      document.getElementById('searchBtnAction').addEventListener('click', doSearch);
+      
+      logDebug('页面已加载，开始获取数据...');
+      fetchUsers();
+    });
+
+    // 显示调试信息
+    function logDebug(message) {
+      const debugEl = document.getElementById('debugInfo');
+      const div = document.createElement('div');
+      div.className = 'debug';
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      debugEl.appendChild(div);
+      // 只保留最近10条调试信息
+      if (debugEl.querySelectorAll('.debug').length > 10) {
+        debugEl.removeChild(debugEl.firstChild);
+      }
+    }
+
+    // 显示错误消息
+    function showError(message) {
+      const errorEl = document.getElementById('errorMessage');
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+      logDebug(`错误: ${message}`);
+      
+      setTimeout(() => {
+        errorEl.classList.add('hidden');
+      }, 5000);
+    }
+
+    // 隐藏错误消息
+    function hideError() {
+      document.getElementById('errorMessage').classList.add('hidden');
+    }
+
+    // 页面切换 - 确保此函数定义在全局作用域
+    function showPage(id) {
+      document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+      });
+      document.getElementById(id).classList.add('active');
+      logDebug(`切换到页面: ${id}`);
+    }
+
+    // 获取所有用户
+    async function fetchUsers() {
+      hideError();
+      logDebug(`正在获取用户数据，请求地址: ${API_URL}/users`);
+      
+      return fetch(`${API_URL}/users`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      })
+     .then(response => {
+        logDebug(`服务器响应状态: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`服务器返回错误: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+     .then(data => {
+        logDebug(`成功获取数据，用户数量: ${data.length}`);
+        users = data;
+        extractAllRoles();
+        renderUsers();
+        showError('数据加载成功');
+        return data;
+      })
+     .catch(error => {
+        let errorMsg = '获取数据失败: ';
+        if (error.name === 'TypeError') {
+          errorMsg += '无法连接到服务器，请检查API_URL是否正确';
+        } else if (error.name === 'AbortError') {
+          errorMsg += '请求超时';
+        } else {
+          errorMsg += error.message;
+        }
+        showError(errorMsg);
+        logDebug(errorMsg);
+        throw error;
+      });
+    }
+
+    // 提取所有角色名
+    function extractAllRoles() {
+      allRoles = [];
+      users.forEach(user => {
+        if (user.roles && Array.isArray(user.roles)) {
+          user.roles.forEach(role => {
+            allRoles.push(role.roleName);
+          });
+        } else {
+          logDebug(`用户 ${user.id} 的roles不是数组，已忽略`);
+          user.roles = [];
+        }
+      });
+      logDebug(`提取到角色名数量: ${allRoles.length}`);
+    }
+
+    // 添加用户
+    async function addUser() {
+      const qq = document.getElementById('qqName').value.trim();
+      const code = document.getElementById('friendCode').value.trim();
+      
+      if (!qq ||!code) {
+        showError('QQ名和好友码不能为空');
+        return;
+      }
+      
+      hideError();
+      logDebug(`准备添加用户: QQ=${qq}, 好友码=${code}`);
+      
+      try {
+        const response = await fetch(`${API_URL}/users`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ qq, code, roles: [] })
+        });
+        
+        logDebug(`添加用户响应状态: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
+        }
+        
+        const newUser = await response.json();
+        logDebug(`成功添加用户，ID: ${newUser.id}`);
+        
+        await fetchUsers();
+        document.getElementById('qqName').value = '';
+        document.getElementById('friendCode').value = '';
+      } catch (error) {
+        showError(`添加用户失败: ${error.message}`);
+        logDebug(`添加用户错误: ${error.message}`);
+      }
+    }
+
+    // 显示/隐藏角色列表
+    function toggleRoles(userId) {
+      const roleList = document.getElementById(`roles-${userId}`);
+      roleList.classList.toggle('hidden');
+      logDebug(`切换用户 ${userId} 的角色列表显示状态`);
+    }
+
+    // 显示添加角色表单
+    function showAddRoleForm(userId) {
+      document.querySelectorAll('.role-form').forEach(form => form.remove());
+      
+      const userEl = document.querySelector(`tr[data-id="${userId}"]`);
+      if (!userEl) {
+        showError('未找到用户元素');
+        return;
+      }
+      
+      const form = document.createElement('tr');
+      form.className = 'role-form';
+      form.innerHTML = `
+        <td colspan="4">
+          <div class="autocomplete">
+            <input type="text" id="roleName-${userId}" placeholder="角色名">
+            <div class="autocomplete-items" id="auto-${userId}"></div>
+          </div>
+          <select id="favor-${userId}">
+            <option value="五十">好感50</option>
+            <option value="非五十">好感非50</option>
+          </select>
+          <select id="weapon-${userId}">
+            <option value="三星">三星</option>
+            <option value="专一">专一</option>
+            <option value="专二">专二</option>
+            <option value="专三">专三</option>
+            <option value="专四">专四</option>
+          </select>
+          <button onclick="addRole(${userId})" class="btn add">保存</button>
+        </td>
+      `;
+      userEl.after(form);
+      setupAutocomplete(userId);
+      logDebug(`显示用户 ${userId} 的添加角色表单`);
+    }
+
+    // 设置自动补全
+    function setupAutocomplete(userId) {
+      const input = document.getElementById(`roleName-${userId}`);
+      const autoBox = document.getElementById(`auto-${userId}`);
+
+      input.addEventListener('input', () => {
+        const val = input.value.toLowerCase();
+        autoBox.innerHTML = '';
+        if (!val) return;
+
+        const matches = [...new Set(allRoles)]
+         .filter(role => role.toLowerCase().includes(val))
+         .slice(0, 5);
+
+        matches.forEach(role => {
+          const div = document.createElement('div');
+          div.textContent = role;
+          div.onclick = () => {
+            input.value = role;
+            autoBox.innerHTML = '';
+          };
+          autoBox.appendChild(div);
+        });
+      });
+    }
+
+    // 添加角色
+    async function addRole(userId) {
+      const user = users.find(u => u.id === userId);
+      if (!user) {
+        showError('用户不存在');
+        return;
+      }
+
+      const roleName = document.getElementById(`roleName-${userId}`).value.trim();
+      const favor = document.getElementById(`favor-${userId}`).value;
+      const weapon = document.getElementById(`weapon-${userId}`).value;
+
+      if (!roleName) {
+        showError('角色名不能为空');
+        return;
+      }
+      
+      hideError();
+      logDebug(`准备添加角色: 用户ID=${userId}, 角色名=${roleName}`);
+      
+      try {
+        const response = await fetch(`${API_URL}/users/${userId}/roles`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            id: Date.now(),
+            roleName, 
+            favor, 
+            weapon 
+          })
+        });
+        
+        logDebug(`添加角色响应状态: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
+        }
+        
+        await fetchUsers();
+      } catch (error) {
+        showError(`添加角色失败: ${error.message}`);
+        logDebug(`添加角色错误: ${error.message}`);
+      }
+    }
+
+    // 编辑角色
+    function editRole(userId, roleId) {
+      const user = users.find(u => u.id === userId);
+      const role = user?.roles?.find(r => r.id === roleId);
+      if (!user ||!role) {
+        showError('用户或角色不存在');
+        return;
+      }
+
+      const roleEl = document.getElementById(`role-${userId}-${roleId}`);
+      roleEl.innerHTML = `
+        <td colspan="4">
+          <div class="autocomplete">
+            <input type="text" id="editName-${userId}-${roleId}" value="${role.roleName}">
+            <div class="autocomplete-items" id="editAuto-${userId}-${roleId}"></div>
+          </div>
+          <select id="editFavor-${userId}-${roleId}">
+            <option value="五十" ${role.favor === '五十'? 'selected' : ''}>好感50</option>
+            <option value="非五十" ${role.favor === '非五十'? 'selected' : ''}>好感非50</option>
+          </select>
+          <select id="editWeapon-${userId}-${roleId}">
+            <option value="三星" ${role.weapon === '三星'? 'selected' : ''}>三星</option>
+            <option value="专一" ${role.weapon === '专一'? 'selected' : ''}>专一</option>
+            <option value="专二" ${role.weapon === '专二'? 'selected' : ''}>专二</option>
+            <option value="专三" ${role.weapon === '专三'? 'selected' : ''}>专三</option>
+            <option value="专四" ${role.weapon === '专四'? 'selected' : ''}>专四</option>
+          </select>
+          <button onclick="saveEdit(${userId}, ${roleId})" class="btn edit">确认</button>
+        </td>
+      `;
+      setupEditAutocomplete(userId, roleId);
+    }
+
+    // 保存编辑
+    async function saveEdit(userId, roleId) {
+      try {
+        const roleName = document.getElementById(`editName-${userId}-${roleId}`).value.trim();
+        const favor = document.getElementById(`editFavor-${userId}-${roleId}`).value;
+        const weapon = document.getElementById(`editWeapon-${userId}-${roleId}`).value;
+        
+        if (!roleName) {
+          showError('角色名不能为空');
+          return;
+        }
+        
+        const response = await fetch(`${API_URL}/users/${userId}/roles/${roleId}`, {
+          method: 'PUT',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ roleName, favor, weapon })
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
+        }
+        
+        await fetchUsers();
+      } catch (error) {
+        showError(`更新角色失败: ${error.message}`);
+      }
+    }
+
+    // 编辑时的自动补全
+    function setupEditAutocomplete(userId, roleId) {
+      const input = document.getElementById(`editName-${userId}-${roleId}`);
+      const autoBox = document.getElementById(`editAuto-${userId}-${roleId}`);
+
+      input.addEventListener('input', () => {
+        const val = input.value.toLowerCase();
+        autoBox.innerHTML = '';
+        if (!val) return;
+
+        const matchesRoles = [...new Set(allRoles)]
+         .filter(role => role.toLowerCase().includes(val))
+         .slice(0, 5);
+
+        matchesRoles.forEach(role => {
+          const div = document.createElement('div');
+          div.textContent = role;
+          div.onclick = () => {
+            input.value = role;
+            autoBox.innerHTML = '';
+          };
+          autoBox.appendChild(div);
+        });
+      });
+    }
+
+    // 删除角色
+    async function delRole(userId, roleId) {
+      if (!confirm('确定要删除这个角色吗？')) return;
+      
+      try {
+        const response = await fetch(`${API_URL}/users/${userId}/roles/${roleId}`, {
+          method: 'DELETE',
+          mode: 'cors'
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
+        }
+        
+        await fetchUsers();
+      } catch (error) {
+        showError(`删除角色失败: ${error.message}`);
+      }
+    }
+
+    // 删除用户
+    async function delUser(id) {
+      if (!confirm('确定要删除这个用户吗？关联的角色也会被删除')) return;
+      
+      try {
+        const response = await fetch(`${API_URL}/users/${id}`, {
+          method: 'DELETE',
+          mode: 'cors'
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
+        }
+        
+        await fetchUsers();
+      } catch (error) {
+        showError(`删除用户失败: ${error.message}`);
+      }
+    }
+
+    // 搜索功能
+    async function doSearch() {
+      const name = document.getElementById('searchName').value.trim().toLowerCase();
+      const favor = document.getElementById('searchFavor').value;
+      const weapon = document.getElementById('searchWeapon').value;
+      const resultEl = document.getElementById('searchResult');
+      resultEl.innerHTML = '';
+
+      try {
+        await fetchUsers();
+        
+        users.forEach(user => {
+          if (!user.roles ||!Array.isArray(user.roles)) return;
+          
+          const matchRoles = user.roles.filter(role => {
+            const nameMatch =!name || role.roleName.toLowerCase().includes(name);
+            const favorMatch =!favor || role.favor === favor;
+            const weaponMatch =!weapon || role.weapon === weapon;
+            return nameMatch && favorMatch && weaponMatch;
+          });
+
+          if (matchRoles.length > 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${user.qq}</td>
+              <td>${user.code}</td>
+              <td>${matchRoles.map(r => `${r.roleName}(${r.favor}/${r.weapon})`).join(', ')}</td>
+            `;
+            resultEl.appendChild(tr);
+          }
+        });
+      } catch (error) {
+        showError(`搜索失败: ${error.message}`);
+      }
+    }
+
+    // 渲染用户列表
+    function renderUsers() {
+      const listEl = document.getElementById('userList');
+      listEl.innerHTML = '';
+
+      if (users.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="4" style="text-align:center">暂无用户数据</td>';
+        listEl.appendChild(tr);
+        return;
+      }
+
+      users.forEach((user, index) => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = user.id;
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${user.qq || '未知'}</td>
+          <td>${user.code || '未知'}</td>
+          <td>
+            <button onclick="delUser(${user.id})" class="btn del">删除</button>
+            <button onclick="toggleRoles(${user.id})" class="btn view">查看角色</button>
+            <button onclick="showAddRoleForm(${user.id})" class="btn add">添加角色</button>
+          </td>
+        `;
+        listEl.appendChild(tr);
+
+        // 角色列表容器
+        const roleContainer = document.createElement('tr');
+        roleContainer.id = `roles-${user.id}`;
+        roleContainer.className = 'hidden';
+        roleContainer.innerHTML = `<td colspan="4"><div id="roleList-${user.id}"></div></td>`;
+        listEl.appendChild(roleContainer);
+
+        // 渲染角色列表
+        const roleList = document.getElementById(`roleList-${user.id}`);
+        if (user.roles && Array.isArray(user.roles) && user.roles.length > 0) {
+          user.roles.forEach(role => {
+            const roleEl = document.createElement('div');
+            roleEl.id = `role-${user.id}-${role.id}`;
+            roleEl.className = 'role-list';
+            roleEl.innerHTML = `
+              <div style="flex:2">${role.roleName}</div>
+              <div style="flex:1">好感: ${role.favor}</div>
+              <div style="flex:1">专武: ${role.weapon}</div>
+              <button onclick="editRole(${user.id}, ${role.id})" class="btn edit">编辑</button>
+              <button onclick="delRole(${user.id}, ${role.id})" class="btn del">删除</button>
+            `;
+            roleList.appendChild(roleEl);
+          });
+        } else {
+          roleList.innerHTML = '<div style="padding:10px">暂无角色数据</div>';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
+    
